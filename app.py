@@ -103,17 +103,20 @@ def get_all_events():
     
     user_agent_str = random.choice(user_agents)
     
+    # Capçaleres actualitzades per imitar al màxim una petició real des del navegador
     headers = {
         "User-Agent": user_agent_str,
         "Accept": "application/json, text/plain, */*",
         "Accept-Language": "es-ES,es;q=0.9,ca;q=0.8,en;q=0.7",
         "Origin": "https://site.fourvenues.com",
-        "Referer": "https://site.fourvenues.com/",
+        "Referer": "https://site.fourvenues.com/es/discotecas-barcelona-1/events",
         "Connection": "keep-alive",
         "Sec-Fetch-Dest": "empty",
         "Sec-Fetch-Mode": "cors",
         "Sec-Fetch-Site": "same-site",
-        "Cache-Control": "max-age=0" 
+        "Cache-Control": "max-age=0",
+        # Afegim el site_id que sovint requereix l'API
+        "x-site-id": "discotecas-barcelona-1"
     }
     
     debug_info = []
@@ -139,8 +142,11 @@ def get_all_events():
             except Exception as e:
                 debug_info.append(f"Error parsejant el JSON: {str(e)}")
                 return [], debug_info
+        elif r.status_code == 401:
+            debug_info.append("Error 401: Fourvenues demana autenticació o un Origin/Referer específic. Hem actualitzat les capçaleres, comprova si persisteix.")
+            return [], debug_info
         elif r.status_code == 403:
-            debug_info.append("Error 403: Cloudflare està bloquejant la petició.")
+            debug_info.append("Error 403: Cloudflare està bloquejant la petició per IP o User-Agent.")
             return [], debug_info
         else:
             debug_info.append(f"Resposta inesperada del servidor: {r.text[:100]}...")
