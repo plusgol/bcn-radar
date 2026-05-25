@@ -1,5 +1,3 @@
 streamlit==1.32.0
 requests==2.31.0
 beautifulsoup4==4.12.3
-
-Aquest codi fa una cerca molt genèrica (busca preus i paraules clau a tota la pàgina). Posa'l a prova al teu Streamlit a veure si aconseguim saltar les defenses d'aquestes webs!
