@@ -3,8 +3,6 @@ import requests
 import json
 import time
 import random
-# Cal afegir 'fake_useragent' al requirements.txt
-from fake_useragent import UserAgent 
 
 # Configuració inicial de la pàgina
 st.set_page_config(
@@ -94,11 +92,16 @@ def get_all_events():
     """Accés a l'API directa de l'enllaç global de Barcelona, esquivant bloquejos"""
     url = "https://api.fourvenues.com/v1/channels/discotecas-barcelona-1/events?limit=30"
     
-    try:
-        ua = UserAgent()
-        user_agent_str = ua.safari
-    except:
-        user_agent_str = "Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1"
+    # Llista de User Agents per no dependre de la llibreria externa
+    user_agents = [
+        "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1",
+        "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1",
+        "Mozilla/5.0 (iPad; CPU OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1",
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Safari/605.1.15",
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Safari/537.36"
+    ]
+    
+    user_agent_str = random.choice(user_agents)
     
     headers = {
         "User-Agent": user_agent_str,
