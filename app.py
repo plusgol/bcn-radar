@@ -94,11 +94,14 @@ def get_all_events():
     """Accés a l'API directa de l'enllaç global de Barcelona, esquivant bloquejos"""
     url = "https://api.fourvenues.com/v1/channels/discotecas-barcelona-1/events?limit=30"
     
-    # Generem un usuari simulat (Mobile/iPhone) per despistar els firewalls
-    ua = UserAgent()
+    try:
+        ua = UserAgent()
+        user_agent_str = ua.safari
+    except:
+        user_agent_str = "Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1"
     
     headers = {
-        "User-Agent": ua.safari, # Simulem ser un iPhone/Safari
+        "User-Agent": user_agent_str,
         "Accept": "application/json, text/plain, */*",
         "Accept-Language": "es-ES,es;q=0.9,ca;q=0.8,en;q=0.7",
         "Origin": "https://site.fourvenues.com",
@@ -107,30 +110,34 @@ def get_all_events():
         "Sec-Fetch-Dest": "empty",
         "Sec-Fetch-Mode": "cors",
         "Sec-Fetch-Site": "same-site",
-        # Simulem temps de càrrega com si fóssim un humà fent scroll
         "Cache-Control": "max-age=0" 
     }
     
     debug_info = []
     
     try:
-        # Petita pausa humana abans de demanar les dades
         time.sleep(random.uniform(0.5, 1.5))
-        
         r = requests.get(url, headers=headers, timeout=15)
         debug_info.append(f"HTTP Status: {r.status_code}")
         
         if r.status_code == 200:
             try:
                 data = r.json()
-                events_list = data.get('data', [])
+                # Extracció robusta de les dades per evitar KeyErrors
+                if isinstance(data, list):
+                    events_list = data
+                elif isinstance(data, dict):
+                    events_list = data.get('data', data.get('items', data.get('events', [])))
+                else:
+                    events_list = []
+                    
                 debug_info.append(f"Events trobats al JSON: {len(events_list)}")
                 return events_list, debug_info
-            except json.JSONDecodeError:
-                debug_info.append("Error: Fourvenues no ha retornat un format JSON vàlid (potser una pantalla de CAPTCHA).")
+            except Exception as e:
+                debug_info.append(f"Error parsejant el JSON: {str(e)}")
                 return [], debug_info
         elif r.status_code == 403:
-            debug_info.append("Error 403: El servidor de Fourvenues (Cloudflare) està bloquejant l'IP de Streamlit per seguretat anti-bots.")
+            debug_info.append("Error 403: Cloudflare està bloquejant la petició.")
             return [], debug_info
         else:
             debug_info.append(f"Resposta inesperada del servidor: {r.text[:100]}...")
@@ -158,9 +165,17 @@ if not events:
             st.code(info)
 else:
     for ev in events:
-        # Obtenim la sala directament de l'event (ja que recollim de l'agregador general)
+        # Prevenció addicional d'errors si l'estructura és diferent
+        if not isinstance(ev, dict):
+            continue
+            
         venue_data = ev.get('venue', {})
-        venue_name = venue_data.get('name', 'Discoteca BCN')
+        # Algunes vegades venue_data és un string en lloc d'un dict, ens assegurem
+        if isinstance(venue_data, dict):
+            venue_name = venue_data.get('name', 'Discoteca BCN')
+        else:
+            venue_name = str(venue_data)
+            
         nom_festa = ev.get('name', 'Festa Principal')
         
         # Inici de la targeta (Card)
@@ -170,9 +185,11 @@ else:
         
         # Extracció de l'estat exacte de cada Release (Tram de venda)
         tickets = ev.get('tickets', [])
-        if tickets:
+        if tickets and isinstance(tickets, list):
             st.markdown("<p style='font-size: 0.75rem; color: #94a3b8; text-transform: uppercase; font-weight: bold; margin-bottom: 8px;'>🎟️ Entrades Generals</p>", unsafe_allow_html=True)
             for t in tickets[:3]:
+                if not isinstance(t, dict):
+                    continue
                 t_name = t.get('name', 'Entrada')
                 t_price = t.get('price', 0)
                 is_sold_out = t.get('isSoldOut', False)
@@ -202,21 +219,26 @@ else:
         
         # Extracció i estat de les Taules VIP
         vips = ev.get('vipTables', [])
-        if vips:
-            preu_minim = min([v.get('minimumConsumption', 300) for v in vips])
-            vips_lliures = sum([1 for v in vips if not v.get('isBooked', False)])
-            
-            vip_badge = f"<span class='status-badge status-soldout'>Esgotat</span>" if vips_lliures == 0 else f"<span class='status-badge status-available'>{vips_lliures} lliures</span>"
-            
-            st.markdown(f"""
-            <div style='display: flex; justify-content: space-between; align-items: center; background: rgba(139, 92, 246, 0.1); padding: 10px; border-radius: 8px; border: 1px solid rgba(139, 92, 246, 0.2);'>
-                <div>
-                    <p style='margin: 0; font-size: 0.75rem; color: #c4b5fd; text-transform: uppercase; font-weight: bold;'>🍾 Taules VIP</p>
-                    <p style='margin: 0; font-size: 0.9rem; font-weight: bold; color: #e2e8f0;'>Des de {preu_minim}€</p>
+        if vips and isinstance(vips, list):
+            # Ens assegurem que les dades tenen el format correcte abans de fer càlculs
+            valid_vips = [v for v in vips if isinstance(v, dict) and 'minimumConsumption' in v]
+            if valid_vips:
+                preu_minim = min([v.get('minimumConsumption', 300) for v in valid_vips])
+                vips_lliures = sum([1 for v in valid_vips if not v.get('isBooked', False)])
+                
+                vip_badge = f"<span class='status-badge status-soldout'>Esgotat</span>" if vips_lliures == 0 else f"<span class='status-badge status-available'>{vips_lliures} lliures</span>"
+                
+                st.markdown(f"""
+                <div style='display: flex; justify-content: space-between; align-items: center; background: rgba(139, 92, 246, 0.1); padding: 10px; border-radius: 8px; border: 1px solid rgba(139, 92, 246, 0.2);'>
+                    <div>
+                        <p style='margin: 0; font-size: 0.75rem; color: #c4b5fd; text-transform: uppercase; font-weight: bold;'>🍾 Taules VIP</p>
+                        <p style='margin: 0; font-size: 0.9rem; font-weight: bold; color: #e2e8f0;'>Des de {preu_minim}€</p>
+                    </div>
+                    {vip_badge}
                 </div>
-                {vip_badge}
-            </div>
-            """, unsafe_allow_html=True)
+                """, unsafe_allow_html=True)
+            else:
+                st.markdown("<p style='font-size: 0.8rem; color: #94a3b8;'>🍾 VIP: Consultar disponibilitat a taquilla.</p>", unsafe_allow_html=True)
         else:
             st.markdown("<p style='font-size: 0.8rem; color: #94a3b8;'>🍾 VIP: Consultar disponibilitat a taquilla.</p>", unsafe_allow_html=True)
             
