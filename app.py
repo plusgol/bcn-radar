@@ -1,5 +1,10 @@
 import streamlit as st
 import requests
+import json
+import time
+import random
+# Cal afegir 'fake_useragent' al requirements.txt
+from fake_useragent import UserAgent 
 
 # Configuració inicial de la pàgina
 st.set_page_config(
@@ -83,35 +88,74 @@ st.markdown("""
 st.title("🪩 BCN Club Radar")
 st.markdown("<p style='color: #94a3b8; font-size: 0.9rem; margin-top: -15px; margin-bottom: 25px;'>📡 Dades en temps real de l'API de Fourvenues</p>", unsafe_allow_html=True)
 
+# Fem servir caching perquè no bloquegin l'IP si tothom entra de cop (guarda dades 2 mins)
+@st.cache_data(ttl=120)
 def get_all_events():
-    """Accés a l'API directa de l'enllaç global de Barcelona proporcionat"""
-    # Utilitzem el slug exacte del link que has passat per agafar totes les discos de cop
+    """Accés a l'API directa de l'enllaç global de Barcelona, esquivant bloquejos"""
     url = "https://api.fourvenues.com/v1/channels/discotecas-barcelona-1/events?limit=30"
+    
+    # Generem un usuari simulat (Mobile/iPhone) per despistar els firewalls
+    ua = UserAgent()
+    
     headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        "User-Agent": ua.safari, # Simulem ser un iPhone/Safari
         "Accept": "application/json, text/plain, */*",
+        "Accept-Language": "es-ES,es;q=0.9,ca;q=0.8,en;q=0.7",
         "Origin": "https://site.fourvenues.com",
-        "Referer": "https://site.fourvenues.com/"
+        "Referer": "https://site.fourvenues.com/",
+        "Connection": "keep-alive",
+        "Sec-Fetch-Dest": "empty",
+        "Sec-Fetch-Mode": "cors",
+        "Sec-Fetch-Site": "same-site",
+        # Simulem temps de càrrega com si fóssim un humà fent scroll
+        "Cache-Control": "max-age=0" 
     }
+    
+    debug_info = []
+    
     try:
-        r = requests.get(url, headers=headers, timeout=10)
+        # Petita pausa humana abans de demanar les dades
+        time.sleep(random.uniform(0.5, 1.5))
+        
+        r = requests.get(url, headers=headers, timeout=15)
+        debug_info.append(f"HTTP Status: {r.status_code}")
+        
         if r.status_code == 200:
-            return r.json().get('data', [])
-    except:
-        pass
-    return []
+            try:
+                data = r.json()
+                events_list = data.get('data', [])
+                debug_info.append(f"Events trobats al JSON: {len(events_list)}")
+                return events_list, debug_info
+            except json.JSONDecodeError:
+                debug_info.append("Error: Fourvenues no ha retornat un format JSON vàlid (potser una pantalla de CAPTCHA).")
+                return [], debug_info
+        elif r.status_code == 403:
+            debug_info.append("Error 403: El servidor de Fourvenues (Cloudflare) està bloquejant l'IP de Streamlit per seguretat anti-bots.")
+            return [], debug_info
+        else:
+            debug_info.append(f"Resposta inesperada del servidor: {r.text[:100]}...")
+            return [], debug_info
+            
+    except requests.exceptions.RequestException as e:
+        debug_info.append(f"Error de connexió a internet o TimeOut: {str(e)}")
+        return [], debug_info
 
 dia_filtrat = st.selectbox("📅 Filtra per dia:", ["Tots els dies", "Dijous", "Divendres", "Dissabte"])
 
-events = get_all_events()
+events, debug_info = get_all_events()
 
 if not events:
     st.markdown("""
     <div class='club-card' style='text-align: center; padding: 30px 15px;'>
-        <p style='color: #64748b; margin: 0;'>Ghost Town 👻</p>
-        <p style='color: #475569; font-size: 0.8rem; margin: 0;'>Cap festa detectada (o l'API bloqueja la connexió des del servidor)</p>
+        <p style='color: #64748b; margin: 0; font-size: 2rem; margin-bottom: 10px;'>👻</p>
+        <p style='color: #e2e8f0; font-weight: bold; margin-bottom: 5px;'>Cap festa detectada (Ghost Town)</p>
+        <p style='color: #94a3b8; font-size: 0.8rem; margin: 0; margin-bottom: 15px;'>Això sol passar perquè l'antivirus de la web bloqueja connexions automàtiques des de servidors.</p>
     </div>
     """, unsafe_allow_html=True)
+    
+    with st.expander("🛠️ Veure detalls tècnics de l'error"):
+        for info in debug_info:
+            st.code(info)
 else:
     for ev in events:
         # Obtenim la sala directament de l'event (ja que recollim de l'agregador general)
