@@ -1,2 +1,4 @@
 streamlit==1.32.0
 requests==2.31.0
+fake_useragent==1.5.1
+Amb això estem enganyant a les mesures antibot de Fourvenues fent-los creure que la petició ve d'un usuari amb iPhone en comptes de Streamlit Cloud. Si la fallada persisteix, obre el desplegable de "Detalls tècnics" que he afegit sota el Ghost Town, i passa'm què hi diu (provablement donarà un HTTP Status de bloqueig que podrem solucionar rotant proxies més endavant).
